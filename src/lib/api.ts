@@ -1,51 +1,95 @@
 import type { ChatMessage } from './types';
 
-// Simulate API delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const API_BASE_URL = 'https://fastapi-render-a7a4.onrender.com';
+
+// Helper function to remove <think>...</think> blocks
+const cleanApiResponse = (text: string): string => {
+  return text.replace(/<think>[\s\S]*?<\/think>\n\n/gm, '').trim();
+};
+
+interface ApiResponse {
+  answer: string;
+  context?: string[]; // Optional, as we primarily use 'answer' for the chat message
+  history?: { type: string; content: string }[]; // Optional
+}
 
 export async function uploadPdfAndInitialQuery(file: File, firstQuestion: string, sessionId: string): Promise<ChatMessage> {
-  await delay(1500 + Math.random() * 1000); // Simulate network latency for upload
-
-  console.log(`API: uploadPdfAndInitialQuery called with sessionId: ${sessionId}`);
+  console.log(`API: Calling uploadPdfAndInitialQuery with sessionId: ${sessionId}`);
   console.log(`File: ${file.name}, Question: "${firstQuestion}"`);
 
-  let botText = `I've received your document "${file.name}" and your question: "${firstQuestion}". I'm processing it now.`;
-  
-  if (firstQuestion.toLowerCase().includes("summarize")) {
-    botText = `Okay, I'm summarizing ${file.name} based on your request: "${firstQuestion}". This might take a moment... Done! The main points are X, Y, and Z.`;
-  } else {
-    botText = `I've received ${file.name}. Regarding your question "${firstQuestion}", let me look into that... Based on the document, the answer is [simulated answer].`;
-  }
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('session_id', sessionId);
+  formData.append('user_input', firstQuestion);
 
-  return {
-    id: crypto.randomUUID(),
-    text: botText,
-    sender: 'bot',
-    timestamp: new Date(),
-    // Document info is implicitly tied to the session now, not necessarily returned with every message.
-  };
+  try {
+    const response = await fetch(`${API_BASE_URL}/upload_pdf/`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('API Error (uploadPdfAndInitialQuery):', response.status, errorData);
+      throw new Error(`API request failed with status ${response.status}: ${errorData}`);
+    }
+
+    const data: ApiResponse = await response.json();
+    
+    return {
+      id: crypto.randomUUID(),
+      text: cleanApiResponse(data.answer),
+      sender: 'bot',
+      timestamp: new Date(),
+    };
+  } catch (error) {
+    console.error('Network or parsing error in uploadPdfAndInitialQuery:', error);
+    // Return a user-friendly error message to be displayed in the chat
+    return {
+      id: crypto.randomUUID(),
+      text: "Sorry, I encountered an error trying to process your document and question. Please try again.",
+      sender: 'bot',
+      timestamp: new Date(),
+    };
+  }
 }
 
 export async function continueConversation(question: string, sessionId: string): Promise<ChatMessage> {
-  await delay(1000 + Math.random() * 500); // Simulate network latency
-
-  console.log(`API: continueConversation called with sessionId: ${sessionId}`);
+  console.log(`API: Calling continueConversation with sessionId: ${sessionId}`);
   console.log(`Question: "${question}"`);
 
-  let botText = `Regarding your question: "${question}"...`;
+  const formData = new FormData();
+  formData.append('session_id', sessionId);
+  formData.append('user_input', question);
 
-  if (question.toLowerCase().includes("details about section 3")) {
-    botText = "Section 3 of the previously uploaded document discusses [simulated details from document based on session].";
-  } else if (question.toLowerCase().includes("thank you")) {
-    botText = "You're welcome! Is there anything else I can help you with from the document?";
-  } else {
-    botText = `Okay, responding to "${question}" based on our ongoing conversation and the document provided earlier. The answer is [simulated contextual answer].`;
+  try {
+    const response = await fetch(`${API_BASE_URL}/invoke_query/`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('API Error (continueConversation):', response.status, errorData);
+      throw new Error(`API request failed with status ${response.status}: ${errorData}`);
+    }
+
+    const data: ApiResponse = await response.json();
+
+    return {
+      id: crypto.randomUUID(),
+      text: cleanApiResponse(data.answer),
+      sender: 'bot',
+      timestamp: new Date(),
+    };
+  } catch (error) {
+    console.error('Network or parsing error in continueConversation:', error);
+    // Return a user-friendly error message
+    return {
+      id: crypto.randomUUID(),
+      text: "Sorry, I couldn't connect to the chatbot to continue our conversation. Please try again.",
+      sender: 'bot',
+      timestamp: new Date(),
+    };
   }
-  
-  return {
-    id: crypto.randomUUID(),
-    text: botText,
-    sender: 'bot',
-    timestamp: new Date(),
-  };
 }
