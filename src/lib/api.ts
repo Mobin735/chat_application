@@ -3,30 +3,49 @@ import type { ChatMessage } from './types';
 // Simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export async function getBotResponse(userMessage: string, document?: File): Promise<ChatMessage> {
-  await delay(1000 + Math.random() * 1000); // Simulate network latency
+export async function uploadPdfAndInitialQuery(file: File, firstQuestion: string, sessionId: string): Promise<ChatMessage> {
+  await delay(1500 + Math.random() * 1000); // Simulate network latency for upload
 
-  let botText = `I received your message: "${userMessage}".`;
-  if (document) {
-    botText += ` And I see you've uploaded a document: ${document.name} (${(document.size / 1024).toFixed(2)} KB).`;
-  }
+  console.log(`API: uploadPdfAndInitialQuery called with sessionId: ${sessionId}`);
+  console.log(`File: ${file.name}, Question: "${firstQuestion}"`);
+
+  let botText = `I've received your document "${file.name}" and your question: "${firstQuestion}". I'm processing it now.`;
   
-  if (userMessage.toLowerCase().includes("hello") || userMessage.toLowerCase().includes("hi")) {
-    botText = "Hello there! How can I assist you with your financial documents today?";
-  } else if (userMessage.toLowerCase().includes("balance")) {
-    botText = "To check your balance, please specify which account or document you're referring to.";
-  } else if (userMessage.toLowerCase().includes("tax")) {
-    botText = "I can help with tax-related queries. What specifically about taxes are you interested in?";
-  } else if (document && document.type === "application/pdf") {
-    botText = `I've processed the PDF: ${document.name}. What information would you like to extract or discuss from it?`;
+  if (firstQuestion.toLowerCase().includes("summarize")) {
+    botText = `Okay, I'm summarizing ${file.name} based on your request: "${firstQuestion}". This might take a moment... Done! The main points are X, Y, and Z.`;
+  } else {
+    botText = `I've received ${file.name}. Regarding your question "${firstQuestion}", let me look into that... Based on the document, the answer is [simulated answer].`;
   }
-
 
   return {
     id: crypto.randomUUID(),
     text: botText,
     sender: 'bot',
     timestamp: new Date(),
-    ...(document && { document: { name: document.name, type: document.type, size: document.size } }),
+    // Document info is implicitly tied to the session now, not necessarily returned with every message.
+  };
+}
+
+export async function continueConversation(question: string, sessionId: string): Promise<ChatMessage> {
+  await delay(1000 + Math.random() * 500); // Simulate network latency
+
+  console.log(`API: continueConversation called with sessionId: ${sessionId}`);
+  console.log(`Question: "${question}"`);
+
+  let botText = `Regarding your question: "${question}"...`;
+
+  if (question.toLowerCase().includes("details about section 3")) {
+    botText = "Section 3 of the previously uploaded document discusses [simulated details from document based on session].";
+  } else if (question.toLowerCase().includes("thank you")) {
+    botText = "You're welcome! Is there anything else I can help you with from the document?";
+  } else {
+    botText = `Okay, responding to "${question}" based on our ongoing conversation and the document provided earlier. The answer is [simulated contextual answer].`;
+  }
+  
+  return {
+    id: crypto.randomUUID(),
+    text: botText,
+    sender: 'bot',
+    timestamp: new Date(),
   };
 }

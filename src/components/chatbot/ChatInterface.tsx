@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useEffect, type FormEvent } from "react";
@@ -7,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./MessageBubble";
 import { DocumentUpload } from "./DocumentUpload";
 import type { ChatMessage } from "@/lib/types";
-import { getBotResponse } from "@/lib/api";
+import { uploadPdfAndInitialQuery, continueConversation } from "@/lib/api"; // Updated API imports
 import { Send, Loader2, Info } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -16,21 +17,28 @@ import { useToast } from "@/hooks/use-toast";
 const initialMessages: ChatMessage[] = [
   {
     id: crypto.randomUUID(),
-    text: "Hello! I'm FinChat Assistant. How can I help you with your financial documents today? Feel free to upload a document or ask a question.",
+    text: "Hello! I'm FinChat Assistant. Please upload a financial document and ask your first question to begin.",
     sender: "bot",
     timestamp: new Date(),
   }
 ];
-
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [inputValue, setInputValue] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isPdfUploaded, setIsPdfUploaded] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Generate a session ID when the component mounts
+    setSessionId(crypto.randomUUID());
+    inputRef.current?.focus();
+  }, []);
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -44,40 +52,86 @@ export function ChatInterface() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-  
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!inputValue.trim() && !selectedFile) return;
-
     setIsLoading(true);
+
+    if (!sessionId) {
+        toast({ title: "Error", description: "Session not initialized. Please refresh.", variant: "destructive"});
+        setIsLoading(false);
+        return;
+    }
+
     const userMessageText = inputValue.trim();
+
+    // Input validation
+    if (!isPdfUploaded) {
+        if (!selectedFile) {
+            toast({
+              title: "PDF Required",
+              description: "Please upload a PDF document with your first message.",
+              variant: "warning",
+            });
+            setIsLoading(false);
+            return;
+        }
+        if (!userMessageText) {
+            toast({
+              title: "Question Required",
+              description: "Please ask a question along with your PDF document.",
+              variant: "warning",
+            });
+            setIsLoading(false);
+            return;
+        }
+    } else { // PDF is already uploaded
+        if (!userMessageText) {
+            toast({
+              title: "Message Required",
+              description: "Please type a message to continue the conversation.",
+              variant: "warning",
+            });
+            setIsLoading(false);
+            return;
+        }
+        if (selectedFile) { // User trying to upload another file
+             toast({
+                title: "PDF Already Processed",
+                description: "A PDF is already associated with this session. New documents will be ignored.",
+                variant: "info"
+            });
+            setSelectedFile(null); // Clear it as it won't be used.
+        }
+    }
     
+    const fileToUpload = selectedFile; // Capture for the first call
+
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       text: userMessageText,
       sender: "user",
       timestamp: new Date(),
-      ...(selectedFile && { document: { name: selectedFile.name, type: selectedFile.type, size: selectedFile.size } }),
+      ...(!isPdfUploaded && fileToUpload && { document: { name: fileToUpload.name, type: fileToUpload.type, size: fileToUpload.size } }),
     };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue("");
     
-    const fileToSend = selectedFile; // Capture selectedFile before clearing it
-    setSelectedFile(null); // Clear the file from UI immediately
-
-    // Reset file input in DocumentUpload component if it exposed a reset function or by key change
-    // For now, this is handled by DocumentUpload itself when a new file is selected or removed.
+    if (!isPdfUploaded && fileToUpload) {
+        setSelectedFile(null); // Clear the file from UI after it's been captured for the first upload
+    }
 
     try {
-      const botMessage = await getBotResponse(userMessageText, fileToSend || undefined);
+      let botMessage: ChatMessage;
+      if (!isPdfUploaded && fileToUpload) {
+        botMessage = await uploadPdfAndInitialQuery(fileToUpload, userMessageText, sessionId);
+        setIsPdfUploaded(true); // Set only after successful upload
+      } else {
+        botMessage = await continueConversation(userMessageText, sessionId);
+      }
       setMessages((prev) => [...prev, botMessage]);
     } catch (error) {
-      console.error("Error getting bot response:", error);
+      console.error("Error in chat:", error);
       toast({
         title: "Error",
         description: "Could not connect to the chatbot. Please try again later.",
@@ -119,18 +173,28 @@ export function ChatInterface() {
       </CardContent>
       <CardFooter className="p-4 border-t bg-muted/30">
         <form onSubmit={handleSubmit} className="flex items-center w-full gap-2">
-          <DocumentUpload onFileSelect={setSelectedFile} isLoading={isLoading} />
+          <DocumentUpload 
+            onFileSelect={setSelectedFile} 
+            isLoading={isLoading} 
+            disabled={isPdfUploaded || isLoading} // Disable after PDF is uploaded or while loading
+          />
           <Input
             ref={inputRef}
             type="text"
-            placeholder="Type your message or upload a document..."
+            placeholder={isPdfUploaded ? "Ask a follow-up question..." : "Type your first question..."}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className="flex-grow rounded-full focus-visible:ring-primary focus-visible:ring-offset-0 px-4 py-2 h-11"
             disabled={isLoading}
             aria-label="Chat message input"
           />
-          <Button type="submit" size="icon" className="rounded-full h-11 w-11 shrink-0" disabled={isLoading || (!inputValue.trim() && !selectedFile)} aria-label="Send message">
+          <Button 
+            type="submit" 
+            size="icon" 
+            className="rounded-full h-11 w-11 shrink-0" 
+            disabled={isLoading || (!inputValue.trim() && (!selectedFile && !isPdfUploaded))} 
+            aria-label="Send message"
+          >
             {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
           </Button>
         </form>
@@ -139,7 +203,7 @@ export function ChatInterface() {
           <Info className="h-4 w-4 text-accent" />
           <AlertTitle className="text-accent">Disclaimer</AlertTitle>
           <AlertDescription className="text-accent/80">
-            FinChat Assistant is for informational purposes only and does not provide financial advice.
+            FinChat Assistant is for informational purposes only and does not provide financial advice. A PDF document must be uploaded for the initial interaction.
           </AlertDescription>
       </Alert>
     </Card>
