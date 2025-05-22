@@ -1,16 +1,21 @@
+
 import type { ChatMessage } from './types';
 
 const API_BASE_URL = 'https://fastapi-render-a7a4.onrender.com';
 
 // Helper function to remove <think>...</think> blocks
 const cleanApiResponse = (text: string): string => {
+  if (typeof text !== 'string') {
+    console.warn('cleanApiResponse received non-string input:', text);
+    return 'Received non-text response.';
+  }
   return text.replace(/<think>[\s\S]*?<\/think>\n\n/gm, '').trim();
 };
 
 interface ApiResponse {
   answer: string;
-  context?: string[]; // Optional, as we primarily use 'answer' for the chat message
-  history?: { type: string; content: string }[]; // Optional
+  context?: string[];
+  history?: { type: string; content: string }[];
 }
 
 export async function uploadPdfAndInitialQuery(file: File, firstQuestion: string, sessionId: string): Promise<ChatMessage> {
@@ -22,19 +27,35 @@ export async function uploadPdfAndInitialQuery(file: File, firstQuestion: string
   formData.append('session_id', sessionId);
   formData.append('user_input', firstQuestion);
 
+  let response: Response;
   try {
-    const response = await fetch(`${API_BASE_URL}/upload_pdf/`, {
+    response = await fetch(`${API_BASE_URL}/upload_pdf/`, {
       method: 'POST',
       body: formData,
     });
 
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error('API Error (uploadPdfAndInitialQuery):', response.status, errorData);
-      throw new Error(`API request failed with status ${response.status}: ${errorData}`);
+      const errorBody = await response.text().catch(() => "Could not read error body");
+      console.error('API Error (uploadPdfAndInitialQuery):', response.status, response.statusText, errorBody);
+      const detail = errorBody.length < 100 && errorBody.length > 0 ? ` (Detail: ${errorBody})` : "";
+      return {
+        id: crypto.randomUUID(),
+        text: `Sorry, the document processor returned an error: ${response.status} ${response.statusText}${detail}. Please try again.`,
+        sender: 'bot',
+        timestamp: new Date(),
+      };
     }
 
     const data: ApiResponse = await response.json();
+    if (typeof data.answer !== 'string') {
+      console.error('API Error (uploadPdfAndInitialQuery): Response `answer` field is not a string or is missing.', data);
+      return {
+        id: crypto.randomUUID(),
+        text: "Sorry, I received an unexpected response format after processing your document. Please try again.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+    }
     
     return {
       id: crypto.randomUUID(),
@@ -42,12 +63,17 @@ export async function uploadPdfAndInitialQuery(file: File, firstQuestion: string
       sender: 'bot',
       timestamp: new Date(),
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Network or parsing error in uploadPdfAndInitialQuery:', error);
-    // Return a user-friendly error message to be displayed in the chat
+    let userFriendlyMessage = "Sorry, I encountered an error trying to process your document and question. Please try again.";
+    if (error instanceof SyntaxError) { // Error parsing JSON
+      userFriendlyMessage = "Sorry, I received an unreadable response from the document processor. Please try again.";
+    } else if (error.message && error.message.toLowerCase().includes('failed to fetch')) { // Generic network error
+        userFriendlyMessage = "Sorry, I couldn't connect to the document processor. Please check your internet connection and try again.";
+    }
     return {
       id: crypto.randomUUID(),
-      text: "Sorry, I encountered an error trying to process your document and question. Please try again.",
+      text: userFriendlyMessage,
       sender: 'bot',
       timestamp: new Date(),
     };
@@ -62,19 +88,35 @@ export async function continueConversation(question: string, sessionId: string):
   formData.append('session_id', sessionId);
   formData.append('user_input', question);
 
+  let response: Response;
   try {
-    const response = await fetch(`${API_BASE_URL}/invoke_query/`, {
+    response = await fetch(`${API_BASE_URL}/invoke_query/`, {
       method: 'POST',
       body: formData,
     });
 
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error('API Error (continueConversation):', response.status, errorData);
-      throw new Error(`API request failed with status ${response.status}: ${errorData}`);
+      const errorBody = await response.text().catch(() => "Could not read error body");
+      console.error('API Error (continueConversation):', response.status, response.statusText, errorBody);
+      const detail = errorBody.length < 100 && errorBody.length > 0 ? ` (Detail: ${errorBody})` : "";
+      return {
+        id: crypto.randomUUID(),
+        text: `The chatbot reported an error: ${response.status} ${response.statusText}${detail}. Please try again.`,
+        sender: 'bot',
+        timestamp: new Date(),
+      };
     }
 
     const data: ApiResponse = await response.json();
+    if (typeof data.answer !== 'string') {
+      console.error('API Error (continueConversation): Response `answer` field is not a string or is missing.', data);
+      return {
+        id: crypto.randomUUID(),
+        text: "Sorry, I received an unexpected response format from the chatbot. Please try again.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+    }
 
     return {
       id: crypto.randomUUID(),
@@ -82,12 +124,17 @@ export async function continueConversation(question: string, sessionId: string):
       sender: 'bot',
       timestamp: new Date(),
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Network or parsing error in continueConversation:', error);
-    // Return a user-friendly error message
+    let userFriendlyMessage = "Sorry, I couldn't connect to the chatbot to continue our conversation. Please try again.";
+    if (error instanceof SyntaxError) {
+      userFriendlyMessage = "Sorry, I received an unreadable response from the chatbot. Please try again.";
+    } else if (error.message && error.message.toLowerCase().includes('failed to fetch')) {
+        userFriendlyMessage = "Sorry, I couldn't connect to the chatbot. Please check your internet connection and try again.";
+    }
     return {
       id: crypto.randomUUID(),
-      text: "Sorry, I couldn't connect to the chatbot to continue our conversation. Please try again.",
+      text: userFriendlyMessage,
       sender: 'bot',
       timestamp: new Date(),
     };
