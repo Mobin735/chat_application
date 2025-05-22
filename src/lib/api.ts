@@ -32,12 +32,14 @@ export async function uploadPdfAndInitialQuery(file: File, firstQuestion: string
     response = await fetch(`${API_BASE_URL}/upload_pdf/`, {
       method: 'POST',
       body: formData,
+      // Note: Do not set Content-Type header manually when using FormData,
+      // the browser will set it correctly with the boundary.
     });
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "Could not read error body");
       console.error('API Error (uploadPdfAndInitialQuery):', response.status, response.statusText, errorBody);
-      const detail = errorBody.length < 100 && errorBody.length > 0 ? ` (Detail: ${errorBody})` : "";
+      const detail = errorBody.length < 200 && errorBody.length > 0 ? ` (Detail: ${errorBody})` : ""; // Increased length for more detail
       return {
         id: crypto.randomUUID(),
         text: `Sorry, the document processor returned an error: ${response.status} ${response.statusText}${detail}. Please try again.`,
@@ -64,12 +66,12 @@ export async function uploadPdfAndInitialQuery(file: File, firstQuestion: string
       timestamp: new Date(),
     };
   } catch (error: any) {
-    console.error('Network or parsing error in uploadPdfAndInitialQuery:', error);
+    console.error('Full error in uploadPdfAndInitialQuery:', error); // Log the full error object
     let userFriendlyMessage = "Sorry, I encountered an error trying to process your document and question. Please try again.";
     if (error instanceof SyntaxError) { // Error parsing JSON
       userFriendlyMessage = "Sorry, I received an unreadable response from the document processor. Please try again.";
     } else if (error.message && error.message.toLowerCase().includes('failed to fetch')) { // Generic network error
-        userFriendlyMessage = "Sorry, I couldn't connect to the document processor. Please check your internet connection and try again.";
+        userFriendlyMessage = "Sorry, I couldn't connect to the document processor. Please check your browser's developer console (Network and Console tabs) for CORS or network errors, and ensure your internet connection is stable.";
     }
     return {
       id: crypto.randomUUID(),
@@ -93,12 +95,13 @@ export async function continueConversation(question: string, sessionId: string):
     response = await fetch(`${API_BASE_URL}/invoke_query/`, {
       method: 'POST',
       body: formData,
+      // Note: Do not set Content-Type header manually when using FormData
     });
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => "Could not read error body");
       console.error('API Error (continueConversation):', response.status, response.statusText, errorBody);
-      const detail = errorBody.length < 100 && errorBody.length > 0 ? ` (Detail: ${errorBody})` : "";
+      const detail = errorBody.length < 200 && errorBody.length > 0 ? ` (Detail: ${errorBody})` : ""; // Increased length
       return {
         id: crypto.randomUUID(),
         text: `The chatbot reported an error: ${response.status} ${response.statusText}${detail}. Please try again.`,
@@ -125,12 +128,12 @@ export async function continueConversation(question: string, sessionId: string):
       timestamp: new Date(),
     };
   } catch (error: any) {
-    console.error('Network or parsing error in continueConversation:', error);
+    console.error('Full error in continueConversation:', error); // Log the full error object
     let userFriendlyMessage = "Sorry, I couldn't connect to the chatbot to continue our conversation. Please try again.";
     if (error instanceof SyntaxError) {
       userFriendlyMessage = "Sorry, I received an unreadable response from the chatbot. Please try again.";
     } else if (error.message && error.message.toLowerCase().includes('failed to fetch')) {
-        userFriendlyMessage = "Sorry, I couldn't connect to the chatbot. Please check your internet connection and try again.";
+        userFriendlyMessage = "Sorry, I couldn't connect to the chatbot. Please check your browser's developer console (Network and Console tabs) for CORS or network errors, and ensure your internet connection is stable.";
     }
     return {
       id: crypto.randomUUID(),
