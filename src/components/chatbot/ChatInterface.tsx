@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, useEffect, type FormEvent } from "react";
@@ -13,6 +12,7 @@ import { Send, Loader2, Info } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { log } from "console";
 
 const initialMessages: ChatMessage[] = [
   {
@@ -29,6 +29,7 @@ export function ChatInterface() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string | null>(null);
   const [isPdfUploaded, setIsPdfUploaded] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -36,7 +37,9 @@ export function ChatInterface() {
 
   useEffect(() => {
     // Generate a session ID when the component mounts
-    setSessionId(crypto.randomUUID());
+    const newSessionId = crypto.randomUUID();
+    setSessionId(newSessionId);
+    setChatId(newSessionId);
     inputRef.current?.focus();
   }, []);
 
@@ -53,25 +56,48 @@ export function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
+  const saveChatHistory = async (updatedMessages: ChatMessage[]) => {
+    if (!chatId) return;
+
+    try {
+      const response = await fetch('/api/chat/save-history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chatId,
+          messages: updatedMessages,
+        }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        console.error('Failed to save chat history:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error saving chat history:', error);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-
-    if (!sessionId) {
+    
+    if (!sessionId || !chatId) {
         toast({ title: "Error", description: "Session not initialized. Please refresh.", variant: "destructive"});
         setIsLoading(false);
         return;
     }
 
     const userMessageText = inputValue.trim();
-
     // Input validation
     if (!isPdfUploaded) {
-        if (!selectedFile) {
+      if (!selectedFile) {
             toast({
               title: "PDF Required",
               description: "Please upload a PDF document with your first message.",
-              variant: "warning",
+              variant: "default",
             });
             setIsLoading(false);
             return;
@@ -80,7 +106,7 @@ export function ChatInterface() {
             toast({
               title: "Question Required",
               description: "Please ask a question along with your PDF document.",
-              variant: "warning",
+              variant: "default",
             });
             setIsLoading(false);
             return;
@@ -90,7 +116,7 @@ export function ChatInterface() {
             toast({
               title: "Message Required",
               description: "Please type a message to continue the conversation.",
-              variant: "warning",
+              variant: "default",
             });
             setIsLoading(false);
             return;
@@ -99,7 +125,7 @@ export function ChatInterface() {
              toast({
                 title: "PDF Already Processed",
                 description: "A PDF is already associated with this session. New documents will be ignored.",
-                variant: "info"
+                variant: "default"
             });
             setSelectedFile(null); // Clear it as it won't be used.
         }
@@ -114,22 +140,45 @@ export function ChatInterface() {
       timestamp: new Date(),
       ...(!isPdfUploaded && fileToUpload && { document: { name: fileToUpload.name, type: fileToUpload.type, size: fileToUpload.size } }),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    
+    // Update messages and save history
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    await saveChatHistory(updatedMessages);
+    
     setInputValue("");
     
     if (!isPdfUploaded && fileToUpload) {
-        setSelectedFile(null); // Clear the file from UI after it's been captured for the first upload
+        setSelectedFile(null);
     }
 
     try {
       let botMessage: ChatMessage;
       if (!isPdfUploaded && fileToUpload) {
+        // Increment chat count only when starting a new chat (first PDF upload)
+        try {
+          const incrementResponse = await fetch('/api/user/increment-chat-count', {
+            method: 'POST',
+            credentials: 'include',
+          });
+          if (!incrementResponse.ok) {
+            console.error('Failed to increment chat count:', await incrementResponse.text());
+          }
+        } catch (error) {
+          console.error('Error incrementing chat count:', error);
+        }
+
         botMessage = await uploadPdfAndInitialQuery(fileToUpload, userMessageText, sessionId);
-        setIsPdfUploaded(true); // Set only after successful upload
+        setIsPdfUploaded(true);
       } else {
         botMessage = await continueConversation(userMessageText, sessionId);
       }
-      setMessages((prev) => [...prev, botMessage]);
+      
+      // Update messages with bot response and save history
+      const finalMessages = [...updatedMessages, botMessage];
+      setMessages(finalMessages);
+      await saveChatHistory(finalMessages);
+
     } catch (error) {
       console.error("Error in chat:", error);
       toast({
@@ -143,7 +192,9 @@ export function ChatInterface() {
         sender: "bot",
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      const errorMessages = [...updatedMessages, errorMessage];
+      setMessages(errorMessages);
+      await saveChatHistory(errorMessages);
     } finally {
       setIsLoading(false);
       inputRef.current?.focus();
@@ -151,7 +202,7 @@ export function ChatInterface() {
   };
 
   return (
-    <Card className="h-[calc(100vh-12rem)] md:h-[calc(100vh-14rem)] w-full flex flex-col shadow-2xl rounded-xl overflow-hidden border-primary/20">
+    <Card className="h-[calc(100vh-8.1rem)] md:h-[calc(100vh-8.1rem)] w-full flex flex-col shadow-2xl rounded-xl overflow-hidden border-primary/20">
       <CardHeader className="p-4 border-b bg-muted/30">
         <h2 className="text-xl font-semibold text-primary">Chat with FinBot</h2>
       </CardHeader>
@@ -199,7 +250,7 @@ export function ChatInterface() {
           </Button>
         </form>
       </CardFooter>
-      <Alert className="m-4 border-accent/50 bg-accent/10">
+      <Alert className="w-[96%] mx-auto my-4 border-accent/50 bg-accent/10">
           <Info className="h-4 w-4 text-accent" />
           <AlertTitle className="text-accent">Disclaimer</AlertTitle>
           <AlertDescription className="text-accent/80">

@@ -17,9 +17,11 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string;
+  chat_id: string;
   title: string; // Could be the first user message or a generated summary
   lastMessageTime: Date;
   messageCount: number;
   // Optional: could include a snippet of the first or last message
   previewText?: string; 
 }
+

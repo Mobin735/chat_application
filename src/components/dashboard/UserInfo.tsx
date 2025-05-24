@@ -7,6 +7,7 @@ interface UserInfoProps {
 }
 
 export function UserInfo({ user }: UserInfoProps) {
+
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300">
       <CardHeader className="pb-4">

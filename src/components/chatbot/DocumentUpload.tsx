@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useRef, type ChangeEvent } from 'react';
@@ -82,12 +81,13 @@ export function DocumentUpload({ onFileSelect, isLoading, disabled }: DocumentUp
         disabled={isLoading || disabled}
       />
       <Button
+        type="button"
         variant="ghost"
         size="icon"
         onClick={triggerFileInput}
         aria-label="Attach document"
         disabled={isLoading || disabled}
-        className={cn("text-muted-foreground hover:text-primary", (disabled && !isLoading) && "opacity-50 cursor-not-allowed hover:text-muted-foreground")}
+        className={cn("text-muted-foreground hover:text-[hsl(0deg_0%_100%)]", (disabled && !isLoading) && "opacity-50 cursor-not-allowed hover:text-muted-foreground")}
         title={disabled ? "PDF already uploaded for this session" : "Attach PDF document"}
       >
         <Paperclip className="h-5 w-5" />
@@ -97,6 +97,7 @@ export function DocumentUpload({ onFileSelect, isLoading, disabled }: DocumentUp
           <UploadCloud className="h-4 w-4 text-primary shrink-0" />
           <span className="truncate" title={selectedFile.name}>{selectedFile.name}</span>
           <Button 
+            type="button"
             variant="ghost" 
             size="icon" 
             onClick={handleRemoveFile} 

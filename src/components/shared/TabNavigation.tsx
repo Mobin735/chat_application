@@ -19,8 +19,8 @@ export function TabNavigation() {
 
 
   return (
-    <Tabs value={activeTab} className="w-full">
-      <TabsList className="grid w-full grid-cols-2 md:w-[400px] mx-auto shadow-sm">
+    <Tabs value={activeTab}>
+      <TabsList className="grid w-full grid-cols-2 md:w-[400px] mx-auto shadow-sm h-auto bg-[hsl(0deg_0%_80.16%)] ml-[35px]">
         <TabsTrigger value="/dashboard" asChild data-testid="dashboard-tab">
           <Link href="/dashboard" className="flex items-center justify-center gap-2 py-2 rounded-md transition-colors duration-150 ease-in-out">
             <LayoutDashboard size={18} />

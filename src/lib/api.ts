@@ -1,7 +1,7 @@
-
 import type { ChatMessage } from './types';
 
-const API_BASE_URL = 'https://fastapi-render-a7a4.onrender.com';
+// const API_BASE_URL = 'https://fastapi-render-a7a4.onrender.com';
+const API_BASE_URL = 'http://localhost:8000';
 
 // Helper function to remove <think>...</think> blocks
 const cleanApiResponse = (text: string): string => {

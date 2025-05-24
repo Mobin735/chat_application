@@ -1,39 +1,62 @@
+"use client"
+
 import { UserInfo } from "@/components/dashboard/UserInfo";
 import { ChatHistoryList } from "@/components/dashboard/ChatHistoryList";
 import type { UserProfile, ChatSession } from "@/lib/types";
 import { Separator } from "@/components/ui/separator";
-
-// Mock data - in a real app, this would come from an API or auth context
-const mockUser: UserProfile = {
-  email: "user@example.com",
-  chatCount: 3,
-};
-
-const mockChatSessions: ChatSession[] = [
-  {
-    id: "1",
-    title: "Inquiry about Q4 Tax Deductions",
-    lastMessageTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-    messageCount: 12,
-    previewText: "Can you explain the new rules for home office deductions...",
-  },
-  {
-    id: "2",
-    title: "Uploaded Payslip for Analysis - June",
-    lastMessageTime: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-    messageCount: 8,
-    previewText: "Here is my payslip for June, can you break down the taxes...",
-  },
-  {
-    id: "3",
-    title: "Restaurant Bill Split Calculation",
-    lastMessageTime: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days ago
-    messageCount: 5,
-    previewText: "I have a restaurant bill, can you help me split it three ways...",
-  },
-];
+import { Loader } from "@/components/ui/loader";
+import { useAuth } from "@/lib/auth";
+import { useEffect, useState } from "react";
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+      
+      try {
+        setIsLoading(true);
+        // Fetch user profile data
+        const profileResponse = await fetch('/api/user/profile', {
+          credentials: 'include',
+        });
+        
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          setUserProfile(profileData);
+        }
+
+        // Fetch chat history
+        const historyResponse = await fetch('/api/chat/history', {
+          credentials: 'include',
+        });
+
+        if (historyResponse.ok) {
+          const historyData = await historyResponse.json();
+          setChatSessions(historyData);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
+  if (isLoading) {
+    return <Loader />;
+  }
+
+  if (!userProfile) {
+    return <div>Error loading user profile</div>;
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -43,10 +66,10 @@ export default function DashboardPage() {
       <Separator />
       <div className="grid gap-8 md:grid-cols-1 lg:grid-cols-3">
         <div className="lg:col-span-1">
-          <UserInfo user={mockUser} />
+          <UserInfo user={userProfile} />
         </div>
         <div className="lg:col-span-2">
-          <ChatHistoryList chatSessions={mockChatSessions} />
+          <ChatHistoryList chatSessions={chatSessions} />
         </div>
       </div>
     </div>
