@@ -31,6 +31,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
+      console.log("checking: ", response)
       // Check if the response is JSON
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {

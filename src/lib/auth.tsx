@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    if (pathname !== '/login') {
+    if (pathname !== '/login' && pathname !== '/signup') {
       verifyToken();
     }
   }, [pathname]);

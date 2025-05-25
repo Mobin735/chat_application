@@ -37,17 +37,17 @@ export function DocumentUpload({ onFileSelect, isLoading, disabled }: DocumentUp
         if(fileInputRef.current) fileInputRef.current.value = ""; 
         return;
       }
-      if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-         toast({
-          title: "Invalid file type",
-          description: `Only PDF files are allowed. You uploaded: ${file.type}`,
-          variant: "destructive",
-        });
-        setSelectedFile(null);
-        onFileSelect(null);
-        if(fileInputRef.current) fileInputRef.current.value = ""; 
-        return;
-      }
+      // if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      //    toast({
+      //     title: "Invalid file type",
+      //     description: `Only PDF files are allowed. You uploaded: ${file.type}`,
+      //     variant: "destructive",
+      //   });
+      //   setSelectedFile(null);
+      //   onFileSelect(null);
+      //   if(fileInputRef.current) fileInputRef.current.value = ""; 
+      //   return;
+      // }
       setSelectedFile(file);
       onFileSelect(file);
     } else {
